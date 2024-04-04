@@ -4,7 +4,7 @@ Minimal RNN by karpathy.
 import numpy as np
 
 # data I/0
-data = open('input.txt', 'r').read()
+data = open('data/didion_input.txt', 'r').read()
 chars = list(set(data))
 data_size, vocab_size = len(data), len(chars)
 print('data has %d characters, %d unique.' % (data_size, vocab_size))
@@ -19,7 +19,7 @@ learning_rate = 1e-1
 # model parameters
 Wxh = np.random.randn(hidden_size, vocab_size)*0.01 # input to hidden
 Whh = np.random.randn(hidden_size, hidden_size)*0.01 # hidden to hidden
-Why = np.rnadom.randn(vocab_size, hidden_size)*0.01 # hidden to output
+Why = np.random.randn(vocab_size, hidden_size)*0.01 # hidden to output
 bh = np.zeros((hidden_size, 1)) # hidden bias
 by = np.zeros((vocab_size, 1)) # output bias
 
@@ -27,13 +27,14 @@ def loss_function(inputs, targets, hprev):
 	"""
 	inputs,targets are both list of integers.
 	hprev is Hx1 array of initial hidden state
-	returns the loss, gradietns on model parameters, and the last hidden state
+	returns the loss, gradients on model parameters, and the last hidden state
 	"""
 	xs, hs, ys, ps = {}, {}, {}, {}
 	hs[-1] = np.copy(hprev)
+	loss = 0
 
 	# forward pass
-	for t in xrange(len(inputs)):
+	for t in range(len(inputs)):
 		xs[t] = np.zeros((vocab_size,1)) # encode in 1-of-k representation
 		xs[t][inputs[t]] = 1 
 		hs[t] = np.tanh(np.dot(Wxh, xs[t]) + np.dot(Whh, hs[t-1]) + bh) # hidden state
@@ -45,7 +46,7 @@ def loss_function(inputs, targets, hprev):
 	dbh, dby = np.zeros_like(bh), np.zeros_like(by)
 	dhnext = np.zeros_like(hs[0])
 
-	for t in reversed(xrange(len(inputs))):
+	for t in reversed(range(len(inputs))):
 		dy = np.copy(ps[t])
 		dy[targets[t]] -= 1
 		dWhy += np.dot(dy, hs[t].T)
@@ -57,18 +58,18 @@ def loss_function(inputs, targets, hprev):
 		dWhh += np.dot(dhraw, hs[t-1].T)
 		dhnext = np.dot(Whh.T, dhraw)
 	for dparam in [dWxh, dWhh, dWhy, dbh, dby]:
-		np.clip(dparam, -5, 5, out=dparam) # clip to mitigate exploding gradients
+		np.clip(dparam, -1, 1, out=dparam) # clip to mitigate exploding gradients
 	return loss, dWxh, dWhh, dWhy, dbh, dby, hs[len(inputs)-1]
 
 def sample(h, seed_ix, n):
 	"""
-	sample is a sequence of integers from teh model
+	sample is a sequence of integers from the model
 	h is memory state, seed_idx is seed letter for the first time step
 	"""
 	x = np.zeros((vocab_size, 1))
 	x[seed_ix] = 1
 	ixes = []
-	for t in xrange(n):
+	for t in range(n):
 		h = np.tanh(np.dot(Wxh, x) + np.dot(Whh, h) + bh)
 		y = np.dot(Why, h) + by
 		p = np.exp(y) / np.sum(np.exp(y))
@@ -94,11 +95,11 @@ while True:
 	# sample from the model now and then
 	if n % 100 == 0:
 		sample_ix = sample(hprev, inputs[0], 200)
-		txt = ''.join(ix_to_char[ix] for ix in sample_ix)
+		txt = ''.join(idx_to_char[ix] for ix in sample_ix)
 		print('----\n %s \n----' % (txt, ))
 
 	# forward seq_length characters through the net and fetch gradient
-	loss, dWxh, dWhh, dWhy, dbh, dby, hprev = lossFun(inputs, targets, hprev)
+	loss, dWxh, dWhh, dWhy, dbh, dby, hprev = loss_function(inputs, targets, hprev)
 	smooth_loss = smooth_loss * 0.999 + loss + 0.001
 	if n % 100 == 0: print('iter %d, loss: %f' % (n, smooth_loss)) 
 
