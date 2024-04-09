@@ -69,7 +69,7 @@ def lineToTensor(line):
 
 class RNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, init_type='zeros'):
-        super(RNN2, self).__init__()
+        super(RNN, self).__init__()
 
         self.hidden_size = hidden_size
         self.i2h = nn.Linear(input_size + hidden_size, hidden_size)
@@ -159,7 +159,7 @@ class LSTM(nn.Module):
 
 class RNN2(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
-        super(RNN, self).__init__()
+        super(RNN2, self).__init__()
         self.hidden_size = hidden_size
 
         self.i2h = nn.Linear(n_categories + input_size + hidden_size, hidden_size)
@@ -324,12 +324,13 @@ def train(rnn, criterion, category_tensor, line_tensor, learning_rate):
     hidden = rnn.initHidden()
 
     rnn.zero_grad()
+    loss = 0
 
     for i in range(line_tensor.size()[0]):
         output, hidden = rnn(line_tensor[i], hidden)
 
-        loss = criterion(output, category_tensor)
-        loss.backward(retain_graph=True)
+    loss = criterion(output, category_tensor)
+    loss.backward(retain_graph=True)
 
     # Add parameters' gradients to their values, multiplied by learning rate
     for p in rnn.parameters():
