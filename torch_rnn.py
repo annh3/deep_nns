@@ -105,37 +105,39 @@ class RNN(nn.Module):
             return torch.zeros(1, self.hidden_size)
 
 class LSTM(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, input_size, hidden_size, output_size, init_type='zeros', n_categories=18):
         super(LSTM, self).__init__()
-        self.cell_size = n_categories + input_size + hidden_size
+        self.cell_size =  hidden_size
         self.output_size = output_size
+        self.hidden_size = hidden_size
+        self.input_size = input_size
         self.cell = torch.zeros(1, self.cell_size)
+        self.init_type = init_type
 
-        self.forget_gate = nn.Linear(self.cell_size, self.cell_size)
-        self.input_gate = nn.Linear(self.cell_size, self.cell_size)
-        self.candidate_gate = nn.Linear(self.cell_size, self.cell_size)
-        self.output_gate = nn.Linear(self.cell_size, self.cell_size)
-        self.o2o = nn.Linear(self.cell_size, self.output_size)
+        self.forget_gate = nn.Linear(n_categories + input_size + hidden_size, self.cell_size)
+        self.input_gate = nn.Linear(n_categories + input_size + hidden_size, self.cell_size)
+        self.candidate_gate = nn.Linear(n_categories + input_size + hidden_size, self.cell_size)
+        self.output_gate = nn.Linear(n_categories + input_size + hidden_size, self.cell_size)
+        self.h2o = nn.Linear(self.cell_size, self.output_size)
         self.dropout = nn.Dropout(0.1)
         self.softmax = nn.LogSoftmax(dim=1)
         self.sigmoid = nn.Sigmoid()
-        self.tanh = torch.tanh()
 
     def forward(self, category, input, hidden):
         input_combined = torch.cat((category, input, hidden), 1)
         forget_layer = self.sigmoid(self.forget_gate(input_combined))
         input_layer = self.sigmoid(self.input_gate(input_combined))
-        candidate_layer = self.tanh(self.candidate_gate(input_combined))
+        candidate_layer = torch.tanh(self.candidate_gate(input_combined))
         self.cell = forget_layer * self.cell + input_layer * candidate_layer
 
         output_layer = self.sigmoid(self.output_gate(input_combined))
-        hidden = output_layer * self.tanh(self.cell)
+        hidden = output_layer * torch.tanh(self.cell)
 
         # adding this
-        output = self.o2o(hidden)
+        output = self.h2o(hidden)
         output = self.dropout(output)
         output = self.softmax(output)
-        return output, cell, hidden
+        return output, hidden
 
     def initHidden(self, init_type='zeros'):
         if self.init_type == 'zeros':
@@ -158,9 +160,10 @@ class LSTM(nn.Module):
             return torch.zeros(1, self.hidden_size)
 
 class RNN2(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
+    def __init__(self, input_size, hidden_size, output_size, init_type='zeros', n_categories=18):
         super(RNN2, self).__init__()
         self.hidden_size = hidden_size
+        self.init_type = init_type
 
         self.i2h = nn.Linear(n_categories + input_size + hidden_size, hidden_size)
         self.i2o = nn.Linear(n_categories + input_size + hidden_size, output_size)
@@ -223,9 +226,9 @@ def randomTrainingExample(category_lines, all_categories):
     return category, line, category_tensor, line_tensor
 
 # One-hot vector for category
-def categoryTensor(category):
+def categoryTensor(all_categories, category):
     li = all_categories.index(category)
-    tensor = torch.zeros(1, n_categories)
+    tensor = torch.zeros(1, len(all_categories))
     tensor[0][li] = 1
     return tensor
 
@@ -234,38 +237,40 @@ def inputTensor(line):
     tensor = torch.zeros(len(line), 1, n_letters)
     for li in range(len(line)):
         letter = line[li]
-        tensor[li][0][all_letters.fine(letter)] = 1
+        tensor[li][0][all_letters.find(letter)] = 1
     return tensor
 
 # ''LongTensor'' of second letter to end (EOS) for target
 def targetTensor(line):
-    letter_indexs = [all_letters.find(line[li]) for li in range(1,len(line))]
-    letter_index.append(nletters-1) # EOS
+    letter_indexes = [all_letters.find(line[li]) for li in range(1,len(line))]
+    letter_indexes.append(len(all_letters)-1) # EOS
     return torch.LongTensor(letter_indexes)
 
 # A helper function that samples (category,line) and transforms to
 # (category, input, output)
 def randomTrainingPairExample(category_lines, all_categories):
-    category, line = randomTrainingPAir(category_lines, all_categories)
-    category_tensor = categoryTensor(category)
-    intput_tensor = inputTensor(line)
+    category, line = randomTrainingPair(category_lines, all_categories)
+    category_tensor = categoryTensor(all_categories,category)
+    input_tensor = inputTensor(line)
     target_tensor = targetTensor(line)
     return category_tensor, input_tensor, target_tensor
 
 
 def train_gen_model(rnn, criterion, category_tensor, input_line_tensor, output_line_tensor, learning_rate, n_letters):
     hidden = rnn.initHidden()
+    output_line_tensor.unsqueeze_(-1)
 
     rnn.zero_grad()
 
     loss = 0
 
     for i in range(input_line_tensor.size()[0]):
-        output, hidden = rnn(input_line_tensor[i], hidden)
+        output, hidden = rnn(category_tensor, input_line_tensor[i], hidden)
 
-        loss += criterion(output, target_line_tensor[i])
+        loss += criterion(output, output_line_tensor[i])
+        # note how this is different than the categorical cass
     
-    loss.backwards(retain_graph=True)
+    loss.backward(retain_graph=True)
 
     for p in rnn.parameters():
         p.data.add_(p.grad.data, alpha=-learning_rate)
@@ -287,9 +292,9 @@ def train_gen_rnn():
         if iter % print_very == 0:
             print('%s (%d %d%%) %.4f' % (timeSince(start), iter, iter / n_iters * 100, loss))
 
-def sample(rnn, category, max_length = 20, start_letter='A'):
+def sample(rnn, all_categories, category, max_length = 20, start_letter='A'):
     with torch.no_grad(): 
-        category_tensor = categoryTensor(category)
+        category_tensor = categoryTensor(all_categories, category)
         input = inputTensor(start_letter)
         hidden = rnn.initHidden()
 
