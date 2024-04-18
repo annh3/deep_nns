@@ -91,6 +91,7 @@ class Embeddings(nn.Module):
     def __init__(self, d_model, vocab):
         super(Embeddings, self).__init__()
         self.lut = nn.Embedding(vocab, d_model)
+        self.d_model = d_model
 
     def forward(self, x):
         return self.lut(x) * math.sqrt(self.d_model)
@@ -221,14 +222,14 @@ class EncoderDecoder(nn.Module):
         x = self.decode(self.encode(source,source_mask), source_mask, target, target_mask)
         return self.generator(x)
 
-def make_model(src_vocab, tgt_vocab, d_model=512, d_ff=2048, h=8, dropout=0.1):
+def make_model(src_vocab, tgt_vocab, N=6, d_model=512, d_ff=2048, h=8, dropout=0.1):
     c = copy.deepcopy
     attn = MultiHeadedAttention(h, d_model, dropout)
     ff = FeedForwardNetwork(d_model, d_ff, dropout)
     position = PositionalEncoding(d_model, dropout)
     model = EncoderDecoder(
-        Encoder(EncoderLayer(d_model,c(attn),c(ff),dropout),6),
-        Decoder(DecoderLayer(d_model,c(attn),c(ff),dropout),6),
+        Encoder(EncoderLayer(d_model,c(attn),c(ff),dropout),N),
+        Decoder(DecoderLayer(d_model,c(attn),c(ff),dropout),N),
         nn.Sequential(Embeddings(d_model,src_vocab),c(position)),
         nn.Sequential(Embeddings(d_model,tgt_vocab),c(position)),
             Generator(d_model,tgt_vocab))
@@ -256,19 +257,20 @@ class Batch:
         "Create a mask to hide padding and future words."
         tgt_mask = (tgt != pad).unsqueeze(-2)
         tgt_mask = tgt_mask & Variable(
-            subsequent_mask(tgt.size(-1)).type_as(tgt_mask.data))
+            future_mask(tgt.size(-1)).type_as(tgt_mask.data))
         return tgt_mask
 
 
 def data_gen(V, batch_size, nbatches, d_model=10):
     "Generate random data for a src-tgt copy task."
-    for i in range(nbatches):
+    i = 0
+    while i < nbatches:
         data = torch.from_numpy(np.random.randint(1, V, size=(batch_size, d_model)))
         data[:, 0] = 1
         src = Variable(data, requires_grad=False)
         tgt = Variable(data, requires_grad=False)
         yield Batch(src, tgt, 0)
-
+        i += 1
 
 def attention_tests():
     N = 100
