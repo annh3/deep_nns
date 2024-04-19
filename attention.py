@@ -17,6 +17,7 @@ def future_mask(size): # usually size = L, the sequence length
     [1 1 0]
     [1 1 1]]
     """
+    #print("future mask size: ", size)
     attn_shape = (1,size,size)
     mask_tensor = torch.ones(attn_shape)
     mask_tensor = torch.tril(mask_tensor)
@@ -30,6 +31,8 @@ def attention(query, key, value, mask=None, dropout=None):
     d_k = query.size()[2]
     key_transpose = key.transpose(2,1)
     attention_weights = torch.matmul(query, key_transpose)
+    #print("attention_weights shape: ", attention_weights.size())
+    #print("mask shape: ", mask.size())
 
     if mask is not None:
         """
@@ -85,7 +88,7 @@ class FeedForwardNetwork(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self,x):
-        return self.w_2(self.dropout(F.ReLU(self.w_1(x))))
+        return self.w_2(self.dropout(nn.functional.relu(self.w_1(x))))
 
 class Embeddings(nn.Module):
     def __init__(self, d_model, vocab):
@@ -103,8 +106,8 @@ class PositionalEncoding(nn.Module):
                 maxlen: int = 5000
         ):
         super(PositionalEncoding, self).__init__()
-        embedding_matrix = torch.zeros((maxlen, emb_size))
-        pos = torch.arange(0,maxlen).reshape(maxlen,1) # for broadcasting
+        embedding_matrix = torch.zeros(maxlen, emb_size)
+        pos = torch.arange(0,maxlen).unsqueeze(1) # for broadcasting
         denominator = torch.exp(-torch.arange(0,emb_size,2)*math.log(10000)/emb_size)
         embedding_matrix[:, 0::2] = torch.sin(pos * denominator)
         embedding_matrix[:, 1::2] = torch.cos(pos * denominator)
@@ -113,8 +116,9 @@ class PositionalEncoding(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.register_buffer('pos_embedding', embedding_matrix)
 
-    def forward(self, token_embedding: torch.Tensor):
-        return self.dropout(token_embedding + self.pos_embedding[:token_embedding.size(0),:])
+    def forward(self, x):
+        x = x + Variable(self.pos_embedding[:, x.size(1)], requires_grad=False)
+        return self.dropout(x)
 
 class Generator(nn.Module):
     "Linear + softmax generation step."
@@ -160,7 +164,7 @@ class EncoderLayer(nn.Module):
 
     def forward(self, x, mask):
         x = self.sublayer[0](x, lambda x: self.self_attn(x,x,x,mask))
-        return self.sublayer[1](x, feed_foward)
+        return self.sublayer[1](x, lambda x: self.feed_forward(x))
 
 class Encoder(nn.Module):
     def __init__(self, layer, N):
@@ -186,7 +190,7 @@ class DecoderLayer(nn.Module):
         m = encoder_outputs
         x = self.sublayer[0](x, lambda x: self.self_attn(x,x,x,target_mask))
         x = self.sublayer[1](x, lambda x: self.self_attn(x,m,m,source_mask))
-        return self.sublayer[2](x, feed_foward)
+        return self.sublayer[2](x, lambda x: self.feed_forward(x))
 
 class Decoder(nn.Module):
     def __init__(self, layer, N):
@@ -215,7 +219,7 @@ class EncoderDecoder(nn.Module):
         return self.encoder(self.src_embed(source),source_mask)
 
     def decode(self, encoder_outputs, source_mask, target, target_mask):
-        return self.decoder(self.tgt_embed(target), encoder_outputs, source_mask, target_mask)
+        return self.decoder(self.tgt_embed(target.long()), encoder_outputs, source_mask, target_mask)
 
     # target??
     def forward(self, source, target, source_mask, target_mask):
@@ -247,7 +251,9 @@ class Batch:
         self.src_mask = (src != pad).unsqueeze(-2)
         if trg is not None:
             self.trg = trg[:, :-1]
+            self.trg = torch.cat((self.trg, torch.zeros(trg.size(0),1)),dim=1)
             self.trg_y = trg[:, 1:]
+            self.trg_y = torch.cat((torch.zeros(trg.size(0),1),self.trg_y),dim=1)
             self.trg_mask = \
                 self.make_std_mask(self.trg, pad)
             self.ntokens = (self.trg_y != pad).data.sum()
