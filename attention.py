@@ -51,6 +51,21 @@ def attention(query, key, value, mask=None, dropout=None):
     # (N, D_v)
     return context_vector
 
+class CachedMultiHeadedAttention(nn.Module):
+   # https://r4j4n.github.io/blogs/posts/kv/
+    def __init__(self,h,d_model,dropout=0.1):
+        super(CachedMultiHeadedAttention, self).__init__()
+        raise NotImplemented
+        """
+        todo(annhe)
+        """
+
+    def forward(self, query, key, value, mask=None):
+        raise NotImplemented
+        """
+        todo(annhe)
+        """
+
 class MultiHeadedAttention(nn.Module):
     def __init__(self,h,d_model,dropout=0.1):
         super(MultiHeadedAttention, self).__init__()
@@ -224,7 +239,6 @@ class EncoderDecoder(nn.Module):
     def decode(self, encoder_outputs, source_mask, target, target_mask):
         return self.decoder(self.tgt_embed(target.long()), encoder_outputs, source_mask, target_mask)
 
-    # target??
     def forward(self, source, target, source_mask, target_mask):
         x = self.decode(self.encode(source,source_mask), source_mask, target, target_mask)
         return self.generator(x)
@@ -232,6 +246,8 @@ class EncoderDecoder(nn.Module):
 def make_model(src_vocab, tgt_vocab, N=6, d_model=512, d_ff=2048, h=8, dropout=0.1):
     c = copy.deepcopy
     attn = MultiHeadedAttention(h, d_model, dropout)
+    # todo(annhe): instantiate Decoder 1st attention later with CachedMultiHeadedAttention
+    # Question: how and when to clear the cache?
     ff = FeedForwardNetwork(d_model, d_ff, dropout)
     position = PositionalEncoding(d_model, dropout)
     model = EncoderDecoder(
