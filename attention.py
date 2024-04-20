@@ -28,9 +28,18 @@ def attention(query, key, value, mask=None, dropout=None):
     # query: (N, L, D_k)
     # key: (N, L, D_k)
     # value: (N, L, D_v)
-    d_k = query.size()[2]
-    key_transpose = key.transpose(2,1)
+    print("attention query size: ", query.size())
+    print("attention key size: ", key.size())
+    print("attention value size: ", value.size())
+    print("attention mask size: ", mask.size())
+    d_k = query.size(-1)
+    key_transpose = key.transpose(-2,-1)
+    print("attention query shape: ", query.size())
+    print("attention key tranpose shape: ", key_transpose.size())
     attention_weights = torch.matmul(query, key_transpose)
+    #print("query shape: ", query.size())
+    #print("key shape: ", key.size())
+    #print("value shape: ", value.size())
     #print("attention_weights shape: ", attention_weights.size())
     #print("mask shape: ", mask.size())
 
@@ -40,6 +49,8 @@ def attention(query, key, value, mask=None, dropout=None):
         [b c -inf]
         [d e f]]
         """
+        print("mask size: ", mask.size())
+        print("attention_weights size ", attention_weights.size())
         attention_weights.masked_fill(mask == 0, 1e-9)
 
     attention_weights = torch.softmax(attention_weights / math.sqrt(d_k), dim=1)
@@ -55,6 +66,7 @@ class MultiHeadedAttention(nn.Module):
         self.h = h
         self.d_k = d_model // h 
         self.d_model = d_model
+        print("mha h, d_k, d_model: ", self.h, self.d_k, self.d_model)
         # Define projection matrices
         self.Q_linears = clones(nn.Linear(self.d_model, self.d_k),h)
         self.K_linears = clones(nn.Linear(self.d_model, self.d_k),h)
@@ -65,10 +77,13 @@ class MultiHeadedAttention(nn.Module):
 
     def forward(self, query, key, value, mask=None):
         # same mask is appled to akk h heads
+        print("mha query shape: ", query.size())
+        print("mha key shape: ", key.size())
+        print("mha value shape: ", value.size())
         N = query.size(0)
         Q_projected = [f(query) for f in self.Q_linears]
-        K_projected = [f(query) for f in self.K_linears]
-        V_projected = [f(query) for f in self.V_linears]
+        K_projected = [f(key) for f in self.K_linears]
+        V_projected = [f(value) for f in self.V_linears]
         attn_contexts = [attention(q,k,v,mask) for q,k,v in zip(Q_projected,K_projected,V_projected)]
         # each of the h attn_contexts should be of dim N x L x d_k
         # we should concatenate them along the last dimension
@@ -188,6 +203,7 @@ class DecoderLayer(nn.Module):
 
     def forward(self, x, encoder_outputs, source_mask, target_mask):
         m = encoder_outputs
+        print("decoder layer m (encoder outputs) size: ", m.size())
         x = self.sublayer[0](x, lambda x: self.self_attn(x,x,x,target_mask))
         x = self.sublayer[1](x, lambda x: self.self_attn(x,m,m,source_mask))
         return self.sublayer[2](x, lambda x: self.feed_forward(x))
@@ -199,6 +215,8 @@ class Decoder(nn.Module):
         self.norm = LayerNorm(layer.size) # d_model # is this necessary?
 
     def forward(self, x, encoder_outputs, source_mask, target_mask):
+        print("decoder x shape: ", x.size())
+        print("decoder encoder_outputs shape: ", encoder_outputs.size())
         for layer in self.layers:
             x = layer(x, encoder_outputs, source_mask, target_mask)
         return self.norm(x)
@@ -305,6 +323,8 @@ def attention_tests():
     context = context.detach().numpy()
     print(context.shape)
     assert context.shape == (N,L,d_v)
+
+    # testing attention for source_masking
 
 def main():
     vocab_size = 10
