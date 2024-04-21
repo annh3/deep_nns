@@ -53,18 +53,65 @@ def attention(query, key, value, mask=None, dropout=None):
 
 class CachedMultiHeadedAttention(nn.Module):
    # https://r4j4n.github.io/blogs/posts/kv/
-    def __init__(self,h,d_model,dropout=0.1):
+    def __init__(self,h,d_model,max_seq_len,dropout=0.1):
         super(CachedMultiHeadedAttention, self).__init__()
-        raise NotImplemented
-        """
-        todo(annhe)
-        """
+        assert d_model // h == 0
+        self.h = h
+        self.d_model = d_model
+        self.d_k = d_model // h
+        # create separate keys cache for each mha head
+        self.keys_cache = [torch.zeros(1,max_seq_len,d_k) for _ in range(h)]
+        self.values_cache = [torch.zeros(1,max_seq_len,d_k) for _ in range(h)]
+        self.Q_matrices = [clone(nn.Linear(d_model,d_k),h)]
+        self.K_matrices = [clone(nn.Linear(d_model,d_k),h)]
+        self.V_matrices = [clone(nn.Linear(d_model,d_k),h)]
+        self.final_linear = nn.Linear(d_model,d_model)
+        self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, mask=None):
-        raise NotImplemented
-        """
-        todo(annhe)
-        """
+
+    def forward(self, x, pos=0, mask=None):
+        # N x L x D
+        # batch_size, L, dimension
+
+        # projecting the new input at position pos
+        x_Q_projected = [self.Q_matrices[i](x) for i in range(self.h)]
+        x_K_projected = [self.K_matrices[i](x[:,-1,:]) for i in range(self.h)]
+        x_V_projected = [self.V_matrices[i](x[:,-1,:]) for i in range(self.h)]
+        for i in range(h):
+            self.keys_cache[i][:,pos,:] = x_K_projected[i]
+            self.values_cache[i][:,pos,:] = x_V_projected[i]
+
+        # need to concatenate with the previous keys and values
+        # for each mha h, need to fetch from cache and project with the new x
+        attn_contexts = []
+        for i in range(h):
+            keys = self.keys_cache[i][:,0:pos,:]
+            values = self.values_cache[i][:,0:pos,:]
+            new_key = x_K_projected[i]
+            keys = torch.cat(keys, new_key, dim=1)
+            values = torch.cat(values, new_value, dim=1)
+            attn_context = attn(x_Q_projected[i],keys,values,mask=mask)
+            attn_contexts.append(attn_context)
+        # concatenate all the attn_contexts for the mha heads
+        attn_concatenated = torch.cat(attn_contexts,dim=2)
+        out = self.final_linear(attn_concatenated)
+        out = self.dropout(out)
+        return out
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 class MultiHeadedAttention(nn.Module):
     def __init__(self,h,d_model,dropout=0.1):
@@ -204,9 +251,9 @@ class DecoderLayer(nn.Module):
         self.sublayer = clones(SublayerConnection(size,dropout), 3)
         self.size = size # d_model
 
-    def forward(self, x, encoder_outputs, source_mask, target_mask):
+    def forward(self, x, encoder_outputs, source_mask, target_mask, pos=0):
         m = encoder_outputs
-        x = self.sublayer[0](x, lambda x: self.self_attn(x,x,x,target_mask))
+        x = self.sublayer[0](x, lambda x: self.self_attn(x,x,x,target_mask, pos))
         x = self.sublayer[1](x, lambda x: self.self_attn(x,m,m,source_mask))
         return self.sublayer[2](x, lambda x: self.feed_forward(x))
 
