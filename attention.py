@@ -60,7 +60,7 @@ class CachedMultiHeadedAttention(nn.Module):
         todo(annhe)
         """
 
-    def forward(self, query, key, value, mask=None):
+    def forward(self, x, mask=None):
         raise NotImplemented
         """
         todo(annhe)
