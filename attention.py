@@ -31,11 +31,6 @@ def attention(query, key, value, mask=None, dropout=None):
     d_k = query.size(-1)
     key_transpose = key.transpose(-2,-1)
     attention_weights = torch.matmul(query, key_transpose)
-    print("query shape: ", query.size())
-    print("key transpose shape: ", key_transpose.size())
-    print("value shape: ", value.size())
-    #print("attention_weights shape: ", attention_weights.size())
-    #print("mask shape: ", mask.size())
 
     if mask is not None:
         """
@@ -43,8 +38,6 @@ def attention(query, key, value, mask=None, dropout=None):
         [b c -inf]
         [d e f]]
         """
-        print("attention_weights shape: ", attention_weights.size())
-        print("mask shape: ", mask.size())
         attention_weights.masked_fill(mask == 0, 1e-9)
 
     attention_weights = torch.softmax(attention_weights / math.sqrt(d_k), dim=1)
@@ -93,8 +86,6 @@ class CachedMultiHeadedAttention(nn.Module):
             new_key = new_key.unsqueeze(1)
             new_value = x_V_projected[i]
             new_value = new_value.unsqueeze(1)
-            print("keys shape: ", keys.size())
-            print("new_key shape: ", new_key.size())
             keys = torch.cat((keys, new_key), dim=1)
             values = torch.cat((values, new_value), dim=1)
             attn_context = attention(x_Q_projected[i],keys,values,mask=mask)
