@@ -31,9 +31,9 @@ def attention(query, key, value, mask=None, dropout=None):
     d_k = query.size(-1)
     key_transpose = key.transpose(-2,-1)
     attention_weights = torch.matmul(query, key_transpose)
-    #print("query shape: ", query.size())
-    #print("key shape: ", key.size())
-    #print("value shape: ", value.size())
+    print("query shape: ", query.size())
+    print("key transpose shape: ", key_transpose.size())
+    print("value shape: ", value.size())
     #print("attention_weights shape: ", attention_weights.size())
     #print("mask shape: ", mask.size())
 
@@ -43,6 +43,8 @@ def attention(query, key, value, mask=None, dropout=None):
         [b c -inf]
         [d e f]]
         """
+        print("attention_weights shape: ", attention_weights.size())
+        print("mask shape: ", mask.size())
         attention_weights.masked_fill(mask == 0, 1e-9)
 
     attention_weights = torch.softmax(attention_weights / math.sqrt(d_k), dim=1)
