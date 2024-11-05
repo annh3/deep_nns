@@ -16,6 +16,7 @@ class basicTest(unittest.TestCase):
 		approximation = torch.Tensor(approximation)
 		rope = RopeEmbedding(2,2,1)
 		X = torch.Tensor([[1,2],[3,4]])
+		X = X[:,:,None]
 		X = rope(X)
 		np.testing.assert_allclose(appromixation,X,rtol=0.05,atol=0.01)
 
