@@ -1,11 +1,11 @@
 """
-python -m unittest rope_embeddings_tests.basicTest.twobytwo_test
+python -m unittest rope_embeddings_test.basicTest.twobytwo_test
 """
 
 import numpy as np
 import torch
 import unittest
-from rope_embedding import RopeEmbedding
+from rope_embeddings import RopeEmbedding
 
 
 class basicTest(unittest.TestCase):
